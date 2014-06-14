@@ -39,7 +39,7 @@ function makeIncDataFile(oldFileContent,newFileContent,chunkSize){
             else if(lastitem.isMatch&&lastitem.data+1==item.data){
                 matchCount++;
             }
-            else if(lastitem.isMatch&&(lastitem.data+1)!=item.data){
+            else if(lastitem.isMatch&&(lastitem.data+1)!=item.data){//需要保证连续匹配的数据块是连续的
                 arrayData+=matchCount+"]";
                 strDataArray.push(JSON.parse(arrayData));
                 arrayData="["+item.data+","
@@ -92,6 +92,12 @@ function doExactMatch( incDataArray,chunkNo) {
  * @param checksumArray
  * @param chunkSize
  * @return
+ * 
+ * [
+ *   {isMatch:false, data:'abcde'},
+ *   {isMatch:true, data:0},
+ *   {isMatch:true, data:2}
+ * ]
  */
 function searchChunk(strInput,checksumArray,chunkSize){
     var incDataArray=new Array();
@@ -126,7 +132,7 @@ function searchChunk(strInput,checksumArray,chunkSize){
         //如果找到匹配块
         else if(matchTrunkIndex>=0){
             //先把新块压入队列
-            if(outBuffer.length>0&&!outBuffer==""){
+            if(outBuffer.length>0&&!outBuffer==""){//未匹配的时候，将新数据保存在outBuffer中
                 doExactNewData(incDataArray,outBuffer);
                 outBuffer="";
             }
@@ -134,13 +140,14 @@ function searchChunk(strInput,checksumArray,chunkSize){
             currentIndex=currentIndex+chunkSize;
 
         }
-        else{
+        else{//未匹配到，则位移到下一个字符为起点的chunk上，如:'abcdefg','abcd'未匹配到，下一步匹配'bcde',然后将'a'记为新数据
             outBuffer=outBuffer+strInput.substring(currentIndex,currentIndex+1);
             currentIndex++;
         }
         if(matchTrunkIndex>=0){lastmatchNo=matchTrunkIndex};
 
     }
+    
     return incDataArray;
 };
 /**
@@ -148,6 +155,11 @@ function searchChunk(strInput,checksumArray,chunkSize){
  * @param fileC
  * @param chunkSize
  * @return
+ * {
+ *   md5_1:[0,2,5],//chunk0,chunk2,chunk5完全相同，md5值为md5_1
+ *   md5_2:[1],
+ *   md5_3:[3,4]
+ * }
  */
 function oldFileChecksum(fileC,chunkSize) {
     var txt = fileC;
@@ -179,8 +191,9 @@ function getMd5ByText(s) {
     return md5sum.digest('hex');
 };
 
-// 从一个匹配的块号序列里面获取离上一个匹配的块号最近的块好
+// 从一个匹配的块号序列里面获取离上一个匹配的块号最近的块号
 // ，有利于压缩数据
+// 主要从lastMatch在numArray数组区间的位置来获取块号
 function getMatchNo(numArray,lastmatchNo){
     if(numArray.length==1){
         return numArray[0];
@@ -191,15 +204,15 @@ function getMatchNo(numArray,lastmatchNo){
         for(var i=0;i<numArray.length;i++){
             var curNo=numArray[i];
             if(curNo>=lastmatchNo&&lastNo<=lastmatchNo){
-                return (lastmatchNo-lastNo)>=(curNo-lastmatchNo)?curNo:lastNo;
+                return (lastmatchNo-lastNo)>=(curNo-lastmatchNo)?curNo:lastNo;//lastNo - lastMatch - curNo : 选择离lastMatch块号最近的块
             }
-            else if(curNo>=lastmatchNo&&lastNo>=lastmatchNo){
+            else if(curNo>=lastmatchNo&&lastNo>=lastmatchNo){//lastMatch - lastNo - curNo : 选择lastNo
                 return lastNo;
             }
-            else if(curNo<=lastmatchNo&&lastNo<=lastmatchNo){
+            else if(curNo<=lastmatchNo&&lastNo<=lastmatchNo){//lastNo - curNo - lastMatch : 选择curNo(最后一个元素)
                 reNo=curNo;
             }
-            else {
+            else {//其他情况
                 reNo=curNo;
             }
             lastNo=curNo;
